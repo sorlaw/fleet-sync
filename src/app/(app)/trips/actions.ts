@@ -1,12 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { trips, vehicles, users } from "@/lib/db/schema";
+import { trips, vehicles, users, inspections } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import { generateDispatchToken } from "@/lib/crypto";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { deleteFilesByUrls } from "@/lib/upload";
 
 export async function createTripAction(
   prevState: unknown,
@@ -26,15 +27,25 @@ export async function createTripAction(
   try {
     const targetDriverId =
       session.role === "admin" ? driverId || session.userId : session.userId;
+    const isApproved = session.role === "admin";
 
     await db.insert(trips).values({
       vehicleId,
       driverId: targetDriverId,
       purpose,
-      status: session.role === "admin" ? "approved" : "pending",
+      status: isApproved ? "approved" : "pending",
     });
 
+    // Jika dibuat oleh admin (langsung approved), ubah status kendaraan ke in_use
+    if (isApproved) {
+      await db
+        .update(vehicles)
+        .set({ status: "in_use", updatedAt: new Date() })
+        .where(eq(vehicles.id, vehicleId));
+    }
+
     revalidatePath("/trips");
+    revalidatePath("/vehicles");
     return { success: true };
   } catch (error) {
     console.error(error);
@@ -70,11 +81,19 @@ export async function approveTripAction(tripId: string) {
 
     const trip = tripData[0];
 
-    // Update status ke approved
+    // Update status trip ke approved
     await db
       .update(trips)
       .set({ status: "approved", updatedAt: new Date() })
       .where(eq(trips.id, tripId));
+
+    // Update status kendaraan ke in_use
+    if (trip.vehicleId) {
+      await db
+        .update(vehicles)
+        .set({ status: "in_use", updatedAt: new Date() })
+        .where(eq(vehicles.id, trip.vehicleId));
+    }
 
     // Generate 2 token (start dan return)
     const startToken = generateDispatchToken(tripId, "start");
@@ -113,6 +132,7 @@ export async function approveTripAction(tripId: string) {
     }
 
     revalidatePath("/trips");
+    revalidatePath("/vehicles");
     return { success: true };
   } catch (error) {
     console.error(error);
@@ -125,12 +145,26 @@ export async function rejectTripAction(tripId: string) {
   if (session?.role !== "admin") return { error: "Unauthorized" };
 
   try {
+    const trip = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.id, tripId))
+      .limit(1);
+
     await db
       .update(trips)
       .set({ status: "rejected", updatedAt: new Date() })
       .where(eq(trips.id, tripId));
 
+    if (trip.length > 0 && trip[0].vehicleId) {
+      await db
+        .update(vehicles)
+        .set({ status: "available", updatedAt: new Date() })
+        .where(eq(vehicles.id, trip[0].vehicleId));
+    }
+
     revalidatePath("/trips");
+    revalidatePath("/vehicles");
     return { success: true };
   } catch (error) {
     console.error(error);
@@ -156,7 +190,15 @@ export async function completeTripAction(tripId: string) {
       .set({ status: "completed", updatedAt: new Date() })
       .where(eq(trips.id, tripId));
 
+    if (trip[0].vehicleId) {
+      await db
+        .update(vehicles)
+        .set({ status: "available", updatedAt: new Date() })
+        .where(eq(vehicles.id, trip[0].vehicleId));
+    }
+
     revalidatePath("/trips");
+    revalidatePath("/vehicles");
     return { success: true };
   } catch (error) {
     console.error(error);
@@ -184,11 +226,61 @@ export async function deleteTripAction(tripId: string) {
   if (session?.role !== "admin") return { error: "Unauthorized" };
 
   try {
+    // 1. Ambil data trip dan data inspeksi terkait untuk mengumpulkan file gambar
+    const trip = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.id, tripId))
+      .limit(1);
+
+    const tripInspections = await db
+      .select()
+      .from(inspections)
+      .where(eq(inspections.tripId, tripId));
+
+    const filesToDelete: (string | null | undefined)[] = [];
+
+    // Kumpulkan foto dari data trip (awal & pengembalian)
+    if (trip.length > 0) {
+      const t = trip[0];
+      if (t.imageUrl && typeof t.imageUrl === "object") {
+        filesToDelete.push(...Object.values(t.imageUrl));
+      }
+      if (t.returnImageUrl && typeof t.returnImageUrl === "object") {
+        filesToDelete.push(...Object.values(t.returnImageUrl));
+      }
+    }
+
+    // Kumpulkan foto dari record inspeksi
+    for (const insp of tripInspections) {
+      filesToDelete.push(
+        insp.frontPhotoUrl,
+        insp.rearPhotoUrl,
+        insp.leftPhotoUrl,
+        insp.rightPhotoUrl
+      );
+    }
+
+    // 2. Hapus file fisik gambar dari disk server
+    await deleteFilesByUrls(filesToDelete);
+
+    // 3. Kembalikan status kendaraan jika trip belum selesai
+    if (trip.length > 0 && trip[0].vehicleId && trip[0].status !== "completed") {
+      await db
+        .update(vehicles)
+        .set({ status: "available", updatedAt: new Date() })
+        .where(eq(vehicles.id, trip[0].vehicleId));
+    }
+
+    // 4. Hapus data inspeksi dan trip dari database
+    await db.delete(inspections).where(eq(inspections.tripId, tripId));
     await db.delete(trips).where(eq(trips.id, tripId));
+
     revalidatePath("/trips");
+    revalidatePath("/vehicles");
     return { success: true };
   } catch (error) {
-    console.error(error);
+    console.error("Delete trip error:", error);
     return { error: "Gagal menghapus trip" };
   }
 }

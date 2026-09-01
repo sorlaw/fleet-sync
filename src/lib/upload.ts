@@ -1,4 +1,4 @@
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, unlink } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
@@ -36,3 +36,25 @@ export async function uploadMultipleFiles(
   }
   return urls;
 }
+
+export async function deleteFileByUrl(url?: string | null): Promise<boolean> {
+  if (!url || !url.startsWith("/uploads/")) return false;
+  try {
+    const relativePath = url.replace(/^\//, "");
+    const filepath = join(process.cwd(), "public", relativePath);
+    await unlink(filepath);
+    return true;
+  } catch {
+    // Ignore error if file doesn't exist or is already removed
+    return false;
+  }
+}
+
+export async function deleteFilesByUrls(urls: (string | null | undefined)[]): Promise<void> {
+  for (const url of urls) {
+    if (url) {
+      await deleteFileByUrl(url);
+    }
+  }
+}
+

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { trips, inspections } from "@/lib/db/schema";
+import { trips, inspections, vehicles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyDispatchToken } from "@/lib/crypto";
 import { uploadFile } from "@/lib/upload";
@@ -68,6 +68,17 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       })
       .where(eq(trips.id, tripId));
+
+    // Update vehicle status to in_use
+    if (trip[0].vehicleId) {
+      await db
+        .update(vehicles)
+        .set({
+          status: "in_use",
+          updatedAt: new Date(),
+        })
+        .where(eq(vehicles.id, trip[0].vehicleId));
+    }
 
     // Create inspection record
     await db.insert(inspections).values({

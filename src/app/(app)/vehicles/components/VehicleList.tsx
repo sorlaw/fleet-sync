@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { deleteVehicleAction } from "../actions";
+import { deleteVehicleAction, updateVehicleStatusAction } from "../actions";
 import EditVehicleModal from "./EditVehicleModal";
 
 interface Vehicle {
@@ -15,6 +15,7 @@ interface Vehicle {
 
 export default function VehicleList({ vehicles }: { vehicles: Vehicle[] }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [editVehicle, setEditVehicle] = useState<Vehicle | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -24,6 +25,15 @@ export default function VehicleList({ vehicles }: { vehicles: Vehicle[] }) {
     setDeletingId(id);
     await deleteVehicleAction(id);
     setDeletingId(null);
+  };
+
+  const handleStatusChange = async (
+    id: string,
+    newStatus: "available" | "in_use" | "maintenance"
+  ) => {
+    setUpdatingStatusId(id);
+    await updateVehicleStatusAction(id, newStatus);
+    setUpdatingStatusId(null);
   };
 
   const handleEditSuccess = () => {
@@ -129,12 +139,29 @@ export default function VehicleList({ vehicles }: { vehicles: Vehicle[] }) {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${status.className}`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-75" />
-                        {status.label}
-                      </span>
+                      <div className="relative inline-block">
+                        <select
+                          value={vehicle.status || "available"}
+                          disabled={updatingStatusId === vehicle.id}
+                          onChange={(e) =>
+                            handleStatusChange(
+                              vehicle.id,
+                              e.target.value as "available" | "in_use" | "maintenance"
+                            )
+                          }
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 transition-all ${status.className} disabled:opacity-50`}
+                        >
+                          <option value="available" className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-medium">
+                            🟢 Tersedia
+                          </option>
+                          <option value="in_use" className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-medium">
+                            🔵 Sedang Dipakai
+                          </option>
+                          <option value="maintenance" className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-medium">
+                            🟡 Maintenance
+                          </option>
+                        </select>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400 font-mono text-xs">
                       {(vehicle.currentOdometer || 0).toLocaleString()} km

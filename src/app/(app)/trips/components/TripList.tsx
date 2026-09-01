@@ -9,6 +9,14 @@ import {
   deleteTripAction,
 } from "../actions";
 import InspectionModal from "./InspectionModal";
+import InspectionComparisonModal from "./InspectionComparisonModal";
+
+interface TripPhotoSet {
+  front?: string;
+  rear?: string;
+  left?: string;
+  right?: string;
+}
 
 interface Trip {
   id: string;
@@ -16,6 +24,8 @@ interface Trip {
   status: string | null;
   startMileage: number | null;
   endMileage: number | null;
+  imageUrl?: TripPhotoSet | null;
+  returnImageUrl?: TripPhotoSet | null;
   createdAt: Date | null;
   driverId: string | null;
   vehicleId: string | null;
@@ -39,6 +49,7 @@ export default function TripList({ trips, isAdmin }: TripListProps) {
     tripId: string;
     type: "start" | "return";
   } | null>(null);
+  const [comparisonTrip, setComparisonTrip] = useState<Trip | null>(null);
 
   const handleAction = async (action: string, tripId: string) => {
     setLoadingId(tripId);
@@ -251,17 +262,32 @@ export default function TripList({ trips, isAdmin }: TripListProps) {
                           </button>
                         )}
 
-                        {/* Admin: Complete returned trips */}
+                        {/* Admin: Complete returned trips with photo comparison */}
                         {isAdmin && trip.status === "returned" && (
                           <button
-                            onClick={() => handleAction("complete", trip.id)}
+                            onClick={() => setComparisonTrip(trip)}
                             disabled={isLoading}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/50 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-50 transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-emerald-600 dark:bg-emerald-500 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span>Selesai</span>
+                            <span>Periksa & Selesaikan</span>
+                          </button>
+                        )}
+
+                        {/* View Inspection History for completed trips */}
+                        {(trip.status === "completed" || (trip.imageUrl && Object.keys(trip.imageUrl).length > 0 && trip.status !== "returned")) && (
+                          <button
+                            onClick={() => setComparisonTrip(trip)}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors cursor-pointer"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.573 16.49 16.638 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span>Lihat Inspeksi</span>
                           </button>
                         )}
 
@@ -336,6 +362,19 @@ export default function TripList({ trips, isAdmin }: TripListProps) {
           type={inspectionModal.type}
           onClose={() => setInspectionModal(null)}
           onSuccess={handleInspectionSuccess}
+        />
+      )}
+
+      {/* Inspection Comparison / History Modal */}
+      {comparisonTrip && (
+        <InspectionComparisonModal
+          trip={comparisonTrip}
+          readOnly={comparisonTrip.status === "completed"}
+          onClose={() => setComparisonTrip(null)}
+          onSuccess={() => {
+            setComparisonTrip(null);
+            window.location.reload();
+          }}
         />
       )}
     </>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { compressImage } from "@/lib/image-compressor";
 
 interface PhotoUploadProps {
   label: string;
@@ -20,20 +21,22 @@ export default function PhotoUpload({
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onUpload(file);
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFile = e.target.files?.[0];
+    if (rawFile) {
+      const compressed = await compressImage(rawFile);
+      onUpload(compressed);
     }
     e.target.value = "";
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      onUpload(file);
+    const rawFile = e.dataTransfer.files?.[0];
+    if (rawFile && rawFile.type.startsWith("image/")) {
+      const compressed = await compressImage(rawFile);
+      onUpload(compressed);
     }
   };
 

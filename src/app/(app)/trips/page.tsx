@@ -31,6 +31,8 @@ export default async function TripsPage() {
       status: trips.status,
       startMileage: trips.startMileage,
       endMileage: trips.endMileage,
+      imageUrl: trips.imageUrl,
+      returnImageUrl: trips.returnImageUrl,
       createdAt: trips.createdAt,
       driverId: trips.driverId,
       vehicleId: trips.vehicleId,
