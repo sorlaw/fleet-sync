@@ -9,6 +9,7 @@ import { handleAvailable } from "./handlers/available";
 import { handleHelp } from "./handlers/help";
 import { isCommand, resolveSender, syncUserJids } from "./utils";
 import { resolveJid } from "./utils-jid";
+import { checkMaintenanceReminders } from "./maintenance";
 
 const BOT_PORT = parseInt(process.env.BOT_PORT || "3001");
 
@@ -42,6 +43,10 @@ waClient.on("ready", async () => {
     console.log(`🚀 Bot server berjalan di port ${BOT_PORT}`);
     console.log(`📡 Health check: http://localhost:${BOT_PORT}/health`);
   });
+
+  // Maintenance reminder: cek saat start + tiap 6 jam
+  await checkMaintenanceReminders(waClient);
+  setInterval(() => checkMaintenanceReminders(waClient), 6 * 3600 * 1000);
 });
 
 // Authentication failure

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { trips, vehicles, users } from "@/lib/db/schema";
+import { trips, vehicles, users, tripExpenses } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sum } from "drizzle-orm";
 import TripList from "./components/TripList";
 import AddTripModal from "./components/AddTripModal";
 
@@ -51,6 +51,23 @@ export default async function TripsPage() {
     ? allTrips
     : allTrips.filter((t) => t.driverId === session?.userId);
 
+  // Total biaya BBM per trip
+  const expenseTotals = await db
+    .select({
+      tripId: tripExpenses.tripId,
+      total: sum(tripExpenses.amount),
+    })
+    .from(tripExpenses)
+    .groupBy(tripExpenses.tripId);
+  const fuelCostByTrip = new Map(
+    expenseTotals.map((e) => [e.tripId, Number(e.total) || 0])
+  );
+
+  const tripsWithCosts = filteredTrips.map((t) => ({
+    ...t,
+    fuelCost: fuelCostByTrip.get(t.id) || 0,
+  }));
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -73,7 +90,7 @@ export default async function TripsPage() {
       </div>
 
       {/* Trip List Full Width */}
-      <TripList trips={filteredTrips} isAdmin={isAdmin} />
+      <TripList trips={tripsWithCosts} isAdmin={isAdmin} />
     </div>
   );
 }

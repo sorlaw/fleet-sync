@@ -33,6 +33,7 @@ interface Trip {
   driverPhone: string | null;
   vehiclePlate: string | null;
   vehicleModel: string | null;
+  fuelCost?: number;
 }
 
 interface TripListProps {
@@ -180,6 +181,11 @@ export default function TripList({ trips, isAdmin }: TripListProps) {
                     </td>
                     <td className="px-6 py-4 text-zinc-700 dark:text-zinc-300">
                       {trip.purpose || "-"}
+                      {trip.fuelCost ? (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1">
+                          ⛽ Rp {trip.fuelCost.toLocaleString("id-ID")}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-6 py-4">
                       <span

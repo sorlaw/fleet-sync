@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { trips, inspections, vehicles } from "@/lib/db/schema";
+import { trips, inspections, vehicles, tripExpenses } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { uploadFile } from "@/lib/upload";
 import { getSession } from "@/lib/auth/session";
@@ -137,6 +137,28 @@ export async function POST(request: NextRequest) {
       leftPhotoUrl: imageUrls.left || null,
       rightPhotoUrl: imageUrls.right || null,
     });
+
+    // Catat biaya BBM saat return (opsional)
+    if (type === "return") {
+      const fuelLiters = formData.get("fuelLiters") as string | null;
+      const fuelPrice = formData.get("fuelPrice") as string | null;
+      const fuelNote = formData.get("fuelNote") as string | null;
+
+      if (fuelLiters && fuelPrice) {
+        const liters = parseFloat(fuelLiters);
+        const pricePerLiter = parseInt(fuelPrice);
+        if (!isNaN(liters) && liters > 0 && !isNaN(pricePerLiter) && pricePerLiter > 0) {
+          await db.insert(tripExpenses).values({
+            tripId,
+            expenseType: "fuel",
+            liters: liters.toFixed(2),
+            pricePerLiter,
+            amount: Math.round(liters * pricePerLiter),
+            note: fuelNote || null,
+          });
+        }
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

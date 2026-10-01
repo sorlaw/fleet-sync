@@ -31,6 +31,9 @@ export default function InspectionModal({
   });
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [mileage, setMileage] = useState("");
+  const [fuelLiters, setFuelLiters] = useState("");
+  const [fuelPrice, setFuelPrice] = useState("");
+  const [fuelNote, setFuelNote] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
@@ -79,6 +82,16 @@ export default function InspectionModal({
       return;
     }
 
+    // Validasi input BBM (opsional, tapi jika isi liter wajib harga)
+    if (fuelLiters && !fuelPrice) {
+      setError("Harga per liter harus diisi jika isi BBM");
+      return;
+    }
+    if (fuelPrice && !fuelLiters) {
+      setError("Liter BBM harus diisi jika isi harga");
+      return;
+    }
+
     setUploading(true);
     setError("");
 
@@ -87,6 +100,11 @@ export default function InspectionModal({
       formData.append("tripId", tripId);
       formData.append("type", type);
       formData.append("mileage", mileage);
+      if (!isStart && fuelLiters && fuelPrice) {
+        formData.append("fuelLiters", fuelLiters);
+        formData.append("fuelPrice", fuelPrice);
+        formData.append("fuelNote", fuelNote);
+      }
 
       for (const [side, file] of Object.entries(photos)) {
         if (file) {
@@ -162,6 +180,65 @@ export default function InspectionModal({
               placeholder="Contoh: 15000"
             />
           </div>
+
+          {/* Fuel Input (opsional, hanya saat return) */}
+          {!isStart && (
+            <div className="space-y-3 p-4 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/60 rounded-xl">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  ⛽ Isi BBM{" "}
+                  <span className="font-normal text-zinc-400">(opsional)</span>
+                </p>
+                {fuelLiters && fuelPrice && (
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                    Rp{" "}
+                    {Math.round(
+                      parseFloat(fuelLiters) * parseFloat(fuelPrice)
+                    ).toLocaleString("id-ID")}
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                    Liter
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={fuelLiters}
+                    onChange={(e) => setFuelLiters(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors font-mono"
+                    placeholder="12.5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                    Harga / Liter (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    value={fuelPrice}
+                    onChange={(e) => setFuelPrice(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors font-mono"
+                    placeholder="10000"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                  Catatan
+                </label>
+                <input
+                  type="text"
+                  value={fuelNote}
+                  onChange={(e) => setFuelNote(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors"
+                  placeholder="Pertalite, shell, dll (opsional)"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (

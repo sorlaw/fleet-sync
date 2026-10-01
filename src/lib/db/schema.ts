@@ -7,6 +7,7 @@ import {
   boolean,
   timestamp,
   jsonb,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -63,5 +64,42 @@ export const inspections = pgTable("inspections", {
   leftPhotoUrl: text("left_photo_url"),
   rightPhotoUrl: text("right_photo_url"),
   driverNotes: text("driver_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const tripExpenses = pgTable("trip_expenses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }),
+  expenseType: varchar("expense_type", { length: 20 }).default("fuel").$type<"fuel" | "other">(),
+  liters: numeric("liters", { precision: 8, scale: 2 }),
+  pricePerLiter: integer("price_per_liter"),
+  amount: integer("amount"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const maintenanceSchedules = pgTable("maintenance_schedules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  vehicleId: uuid("vehicle_id").references(() => vehicles.id),
+  maintenanceType: varchar("maintenance_type", { length: 100 }).notNull(),
+  intervalKm: integer("interval_km"),
+  intervalDays: integer("interval_days"),
+  lastServiceOdometer: integer("last_service_odometer").default(0),
+  lastServiceDate: timestamp("last_service_date").defaultNow(),
+  lastRemindedAt: timestamp("last_reminded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id),
+  type: varchar("type", { length: 30 }).notNull().$type<
+    "trip_created" | "trip_approved" | "trip_rejected" | "trip_completed" | "maintenance_due"
+  >(),
+  title: varchar("title", { length: 255 }).notNull(),
+  body: text("body"),
+  tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }),
+  isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });

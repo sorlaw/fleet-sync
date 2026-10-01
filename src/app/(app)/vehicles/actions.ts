@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { vehicles, trips, inspections } from "@/lib/db/schema";
+import { vehicles, trips, inspections, maintenanceSchedules } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
@@ -168,6 +168,104 @@ export async function updateVehicleStatusAction(
   } catch (error) {
     console.error(error);
     return { error: "Gagal mengupdate status kendaraan" };
+  }
+}
+
+export async function addMaintenanceScheduleAction(
+  prevState: unknown,
+  formData: FormData
+) {
+  const session = await getSession();
+  if (session?.role !== "admin") return { error: "Unauthorized" };
+
+  const vehicleId = formData.get("vehicleId") as string;
+  const maintenanceType = formData.get("maintenanceType") as string;
+  const intervalKm = formData.get("intervalKm") as string;
+  const intervalDays = formData.get("intervalDays") as string;
+  const lastServiceOdometer = formData.get("lastServiceOdometer") as string;
+  const lastServiceDate = formData.get("lastServiceDate") as string;
+
+  if (!vehicleId || !maintenanceType) {
+    return { error: "Kendaraan dan jenis servis harus diisi" };
+  }
+
+  if (!intervalKm && !intervalDays) {
+    return { error: "Isi minimal salah satu: interval km atau interval hari" };
+  }
+
+  try {
+    await db.insert(maintenanceSchedules).values({
+      vehicleId,
+      maintenanceType,
+      intervalKm: intervalKm ? parseInt(intervalKm) : null,
+      intervalDays: intervalDays ? parseInt(intervalDays) : null,
+      lastServiceOdometer: lastServiceOdometer
+        ? parseInt(lastServiceOdometer)
+        : 0,
+      lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : new Date(),
+    });
+
+    revalidatePath("/vehicles");
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal menambah jadwal servis" };
+  }
+}
+
+export async function markServicedAction(scheduleId: string) {
+  const session = await getSession();
+  if (session?.role !== "admin") return { error: "Unauthorized" };
+
+  try {
+    const schedule = await db
+      .select()
+      .from(maintenanceSchedules)
+      .where(eq(maintenanceSchedules.id, scheduleId))
+      .limit(1);
+
+    if (schedule.length === 0 || !schedule[0].vehicleId) {
+      return { error: "Jadwal tidak ditemukan" };
+    }
+
+    const vehicle = await db
+      .select({ currentOdometer: vehicles.currentOdometer })
+      .from(vehicles)
+      .where(eq(vehicles.id, schedule[0].vehicleId))
+      .limit(1);
+
+    await db
+      .update(maintenanceSchedules)
+      .set({
+        lastServiceOdometer: vehicle[0]?.currentOdometer || 0,
+        lastServiceDate: new Date(),
+        lastRemindedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(maintenanceSchedules.id, scheduleId));
+
+    revalidatePath("/vehicles");
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal update servis" };
+  }
+}
+
+export async function deleteMaintenanceScheduleAction(scheduleId: string) {
+  const session = await getSession();
+  if (session?.role !== "admin") return { error: "Unauthorized" };
+
+  try {
+    await db
+      .delete(maintenanceSchedules)
+      .where(eq(maintenanceSchedules.id, scheduleId));
+
+    revalidatePath("/vehicles");
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal menghapus jadwal servis" };
   }
 }
 

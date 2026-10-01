@@ -1,9 +1,11 @@
 import { db } from "@/lib/db";
-import { vehicles } from "@/lib/db/schema";
+import { vehicles, maintenanceSchedules } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import VehicleList from "./components/VehicleList";
 import AddVehicleModal from "./components/AddVehicleModal";
+import MaintenancePanel from "./components/MaintenancePanel";
 
 export default async function VehiclesPage() {
   const session = await getSession();
@@ -15,6 +17,22 @@ export default async function VehiclesPage() {
     .select()
     .from(vehicles)
     .orderBy(vehicles.createdAt);
+
+  const scheduleRows = await db
+    .select({
+      id: maintenanceSchedules.id,
+      vehicleId: maintenanceSchedules.vehicleId,
+      maintenanceType: maintenanceSchedules.maintenanceType,
+      intervalKm: maintenanceSchedules.intervalKm,
+      intervalDays: maintenanceSchedules.intervalDays,
+      lastServiceOdometer: maintenanceSchedules.lastServiceOdometer,
+      lastServiceDate: maintenanceSchedules.lastServiceDate,
+      vehiclePlate: vehicles.licensePlate,
+      vehicleModel: vehicles.makeModel,
+      currentOdometer: vehicles.currentOdometer,
+    })
+    .from(maintenanceSchedules)
+    .leftJoin(vehicles, eq(maintenanceSchedules.vehicleId, vehicles.id));
 
   return (
     <div className="space-y-6">
@@ -35,6 +53,20 @@ export default async function VehiclesPage() {
 
       {/* Vehicle List Full Width */}
       <VehicleList vehicles={allVehicles} />
+
+      {/* Maintenance schedules */}
+      <MaintenancePanel
+        schedules={scheduleRows.map((s) => ({
+          ...s,
+          lastServiceDate: s.lastServiceDate?.toISOString() ?? null,
+        }))}
+        vehicles={allVehicles.map((v) => ({
+          id: v.id,
+          licensePlate: v.licensePlate,
+          makeModel: v.makeModel,
+          currentOdometer: v.currentOdometer,
+        }))}
+      />
     </div>
   );
 }

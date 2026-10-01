@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import NotificationBell from "@/components/NotificationBell";
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -52,6 +53,26 @@ const navItems = [
       </svg>
     ),
     roles: ["admin"],
+  },
+  {
+    label: "Laporan",
+    href: "/reports",
+    icon: (
+      <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+      </svg>
+    ),
+    roles: ["admin"],
+  },
+  {
+    label: "Profil",
+    href: "/profile",
+    icon: (
+      <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+      </svg>
+    ),
+    roles: ["admin", "driver"],
   },
 ];
 
@@ -155,8 +176,9 @@ export default function ClientLayout({ children, user }: ClientLayoutProps) {
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:block">
               <span className="font-medium text-zinc-900 dark:text-zinc-200">{user.email}</span>
             </div>
           </div>

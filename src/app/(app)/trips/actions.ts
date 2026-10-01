@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import { generateDispatchToken } from "@/lib/crypto";
 import { sendWhatsAppMessage, notifyAdmins } from "@/lib/whatsapp";
+import { notifyAdminsInApp, notifyUsersInApp } from "@/lib/notifications";
 import { deleteFilesByUrls } from "@/lib/upload";
 
 export async function createTripAction(
@@ -29,12 +30,16 @@ export async function createTripAction(
       session.role === "admin" ? driverId || session.userId : session.userId;
     const isApproved = session.role === "admin";
 
-    await db.insert(trips).values({
-      vehicleId,
-      driverId: targetDriverId,
-      purpose,
-      status: isApproved ? "approved" : "pending",
-    });
+    const inserted = await db
+      .insert(trips)
+      .values({
+        vehicleId,
+        driverId: targetDriverId,
+        purpose,
+        status: isApproved ? "approved" : "pending",
+      })
+      .returning({ id: trips.id });
+    const newTripId = inserted[0]?.id;
 
     // Jika dibuat oleh admin (langsung approved), ubah status kendaraan ke in_use
     if (isApproved) {
@@ -44,7 +49,7 @@ export async function createTripAction(
         .where(eq(vehicles.id, vehicleId));
     }
 
-    // Notifikasi WA ke admin saat driver membuat trip (status pending)
+    // Notifikasi WA + in-app ke admin saat driver membuat trip (status pending)
     if (!isApproved) {
       try {
         const [driverData, vehicleData, adminList] = await Promise.all([
@@ -62,7 +67,7 @@ export async function createTripAction(
             .where(eq(vehicles.id, vehicleId))
             .limit(1),
           db
-            .select({ phoneNumber: users.phoneNumber })
+            .select({ id: users.id, phoneNumber: users.phoneNumber })
             .from(users)
             .where(
               and(
@@ -85,12 +90,20 @@ export async function createTripAction(
           `Tujuan: ${purpose}\n\n` +
           `Buka dashboard untuk menyetujui.`;
 
-        await notifyAdmins(
-          adminList
-            .map((a) => a.phoneNumber)
-            .filter((p): p is string => !!p),
-          message
-        );
+        await Promise.all([
+          notifyAdminsInApp(
+            "trip_created",
+            "Booking Baru",
+            `${driverName} minta trip ke ${purpose} (${vehicleLabel})`,
+            newTripId
+          ),
+          notifyAdmins(
+            adminList
+              .map((a) => a.phoneNumber)
+              .filter((p): p is string => !!p),
+            message
+          ),
+        ]);
       } catch (waError) {
         console.error(`[CreateTrip] ❌ Admin notify error:`, waError);
         // Jangan throw error, trip sudah dibuat
@@ -148,6 +161,17 @@ export async function approveTripAction(tripId: string) {
         .where(eq(vehicles.id, trip.vehicleId));
     }
 
+    // Notifikasi in-app ke driver
+    if (trip.driverId) {
+      await notifyUsersInApp(
+        [trip.driverId],
+        "trip_approved",
+        "Trip Disetujui ✅",
+        `Trip ke ${trip.purpose} (${trip.vehiclePlate}) disetujui admin`,
+        tripId
+      );
+    }
+
     // Generate 2 token (start dan return)
     const startToken = generateDispatchToken(tripId, "start");
     const returnToken = generateDispatchToken(tripId, "return");
@@ -201,6 +225,7 @@ export async function rejectTripAction(tripId: string) {
     const tripData = await db
       .select({
         id: trips.id,
+        driverId: trips.driverId,
         vehicleId: trips.vehicleId,
         purpose: trips.purpose,
         driverPhone: users.phoneNumber,
@@ -227,6 +252,17 @@ export async function rejectTripAction(tripId: string) {
         .update(vehicles)
         .set({ status: "available", updatedAt: new Date() })
         .where(eq(vehicles.id, trip.vehicleId));
+    }
+
+    // Notifikasi in-app ke driver
+    if (trip.driverId) {
+      await notifyUsersInApp(
+        [trip.driverId],
+        "trip_rejected",
+        "Trip Ditolak ❌",
+        `Trip ke ${trip.purpose} (${trip.vehiclePlate}) ditolak admin`,
+        tripId
+      );
     }
 
     // Kirim WA ke driver agar tahu trip ditolak
@@ -282,6 +318,17 @@ export async function completeTripAction(tripId: string) {
         .update(vehicles)
         .set({ status: "available", updatedAt: new Date() })
         .where(eq(vehicles.id, trip[0].vehicleId));
+    }
+
+    // Notifikasi in-app ke driver
+    if (trip[0].driverId) {
+      await notifyUsersInApp(
+        [trip[0].driverId],
+        "trip_completed",
+        "Trip Selesai 🏁",
+        `Trip ke ${trip[0].purpose || "-"} telah diselesaikan admin`,
+        tripId
+      );
     }
 
     revalidatePath("/trips");
