@@ -1,8 +1,10 @@
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { vehicles, trips, users } from "@/lib/db/schema";
-import { eq, count, and } from "drizzle-orm";
+import { eq, count, and, gte } from "drizzle-orm";
 import Link from "next/link";
+import TripChart from "./components/TripChart";
+import type { TripChartData } from "./components/TripChart";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -37,6 +39,41 @@ export default async function DashboardPage() {
           )
         ))[0]?.count || 0
     : 0;
+
+  // Trip count per day for last 7 days (admin only)
+  let chartData: TripChartData[] = [];
+  if (isAdmin) {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const recentTripDates = await db
+      .select({ createdAt: trips.createdAt })
+      .from(trips)
+      .where(gte(trips.createdAt, sevenDaysAgo));
+
+    const countsByDay = new Map<string, number>();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sevenDaysAgo);
+      d.setDate(d.getDate() + i);
+      countsByDay.set(d.toISOString().slice(0, 10), 0);
+    }
+
+    for (const row of recentTripDates) {
+      if (!row.createdAt) continue;
+      const key = row.createdAt.toISOString().slice(0, 10);
+      if (countsByDay.has(key)) {
+        countsByDay.set(key, (countsByDay.get(key) || 0) + 1);
+      }
+    }
+
+    chartData = Array.from(countsByDay.entries()).map(([date, c]) => ({
+      day: new Date(date + "T00:00:00").toLocaleDateString("id-ID", {
+        weekday: "short",
+      }),
+      count: c,
+    }));
+  }
 
   // Get recent trips
   const recentTrips = await db
@@ -139,6 +176,9 @@ export default async function DashboardPage() {
           />
         </div>
       )}
+
+      {/* Trip usage chart (admin only) */}
+      {isAdmin && <TripChart data={chartData} />}
 
       {/* Trips Table */}
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs overflow-hidden">

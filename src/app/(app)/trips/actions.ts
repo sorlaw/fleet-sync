@@ -2,11 +2,11 @@
 
 import { db } from "@/lib/db";
 import { trips, vehicles, users, inspections } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import { generateDispatchToken } from "@/lib/crypto";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { sendWhatsAppMessage, notifyAdmins } from "@/lib/whatsapp";
 import { deleteFilesByUrls } from "@/lib/upload";
 
 export async function createTripAction(
@@ -42,6 +42,59 @@ export async function createTripAction(
         .update(vehicles)
         .set({ status: "in_use", updatedAt: new Date() })
         .where(eq(vehicles.id, vehicleId));
+    }
+
+    // Notifikasi WA ke admin saat driver membuat trip (status pending)
+    if (!isApproved) {
+      try {
+        const [driverData, vehicleData, adminList] = await Promise.all([
+          db
+            .select({ fullName: users.fullName })
+            .from(users)
+            .where(eq(users.id, targetDriverId))
+            .limit(1),
+          db
+            .select({
+              licensePlate: vehicles.licensePlate,
+              makeModel: vehicles.makeModel,
+            })
+            .from(vehicles)
+            .where(eq(vehicles.id, vehicleId))
+            .limit(1),
+          db
+            .select({ phoneNumber: users.phoneNumber })
+            .from(users)
+            .where(
+              and(
+                eq(users.role, "admin"),
+                eq(users.isActive, true),
+                isNotNull(users.phoneNumber)
+              )
+            ),
+        ]);
+
+        const driverName = driverData[0]?.fullName || "Driver";
+        const vehicleLabel = vehicleData[0]
+          ? `${vehicleData[0].licensePlate} - ${vehicleData[0].makeModel}`
+          : "-";
+
+        const message =
+          `*Booking Baru* 🔔\n\n` +
+          `Driver: ${driverName}\n` +
+          `Kendaraan: ${vehicleLabel}\n` +
+          `Tujuan: ${purpose}\n\n` +
+          `Buka dashboard untuk menyetujui.`;
+
+        await notifyAdmins(
+          adminList
+            .map((a) => a.phoneNumber)
+            .filter((p): p is string => !!p),
+          message
+        );
+      } catch (waError) {
+        console.error(`[CreateTrip] ❌ Admin notify error:`, waError);
+        // Jangan throw error, trip sudah dibuat
+      }
     }
 
     revalidatePath("/trips");
@@ -145,22 +198,56 @@ export async function rejectTripAction(tripId: string) {
   if (session?.role !== "admin") return { error: "Unauthorized" };
 
   try {
-    const trip = await db
-      .select()
+    const tripData = await db
+      .select({
+        id: trips.id,
+        vehicleId: trips.vehicleId,
+        purpose: trips.purpose,
+        driverPhone: users.phoneNumber,
+        vehiclePlate: vehicles.licensePlate,
+        vehicleModel: vehicles.makeModel,
+      })
       .from(trips)
+      .leftJoin(users, eq(trips.driverId, users.id))
+      .leftJoin(vehicles, eq(trips.vehicleId, vehicles.id))
       .where(eq(trips.id, tripId))
       .limit(1);
+
+    if (tripData.length === 0) return { error: "Trip tidak ditemukan" };
+
+    const trip = tripData[0];
 
     await db
       .update(trips)
       .set({ status: "rejected", updatedAt: new Date() })
       .where(eq(trips.id, tripId));
 
-    if (trip.length > 0 && trip[0].vehicleId) {
+    if (trip.vehicleId) {
       await db
         .update(vehicles)
         .set({ status: "available", updatedAt: new Date() })
-        .where(eq(vehicles.id, trip[0].vehicleId));
+        .where(eq(vehicles.id, trip.vehicleId));
+    }
+
+    // Kirim WA ke driver agar tahu trip ditolak
+    if (trip.driverPhone) {
+      const message =
+        `*Trip Ditolak* ❌\n\n` +
+        `Kendaraan: ${trip.vehiclePlate} - ${trip.vehicleModel}\n` +
+        `Tujuan: ${trip.purpose}\n\n` +
+        `Hubungi admin untuk info lebih lanjut.`;
+
+      try {
+        const sent = await sendWhatsAppMessage(trip.driverPhone, message);
+        if (sent) {
+          console.log(`[Reject] ✅ WA sent to driver: ${trip.driverPhone}`);
+        } else {
+          console.error(`[Reject] ❌ Failed to send WA to driver: ${trip.driverPhone}`);
+        }
+      } catch (waError) {
+        console.error(`[Reject] ❌ WA send error:`, waError);
+        // Jangan throw error, trip sudah di-reject
+      }
     }
 
     revalidatePath("/trips");
