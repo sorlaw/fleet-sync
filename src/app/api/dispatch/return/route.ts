@@ -6,8 +6,17 @@ import { verifyDispatchToken } from "@/lib/crypto";
 import { uploadFile } from "@/lib/upload";
 
 export async function POST(request: NextRequest) {
+  let formData: FormData;
   try {
-    const formData = await request.formData();
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Bad request: invalid form data" },
+      { status: 400 }
+    );
+  }
+
+  try {
     const token = formData.get("token") as string;
     const mileage = formData.get("mileage") as string;
 
@@ -38,8 +47,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (trip[0].status !== "in_progress") {
+      const done =
+        trip[0].status === "returned" || trip[0].status === "completed";
       return NextResponse.json(
-        { error: "Trip belum dimulai" },
+        {
+          error: done
+            ? "Inspeksi akhir sudah dilakukan. Minta link baru ke admin."
+            : "Trip belum dimulai. Isi inspeksi awal terlebih dahulu.",
+        },
         { status: 400 }
       );
     }

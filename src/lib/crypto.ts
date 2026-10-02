@@ -18,6 +18,7 @@ export function verifyDispatchToken(token: string): {
   tripId: string;
   type: "start" | "return";
   valid: boolean;
+  expired?: boolean;
 } {
   try {
     const decoded = Buffer.from(token, "base64url").toString();
@@ -37,7 +38,7 @@ export function verifyDispatchToken(token: string): {
     // Check expiry (24 hours)
     const tokenAge = Date.now() - parseInt(timestamp);
     if (tokenAge > 24 * 60 * 60 * 1000)
-      return { tripId: "", type: "start", valid: false };
+      return { tripId: "", type: "start", valid: false, expired: true };
 
     return {
       tripId,

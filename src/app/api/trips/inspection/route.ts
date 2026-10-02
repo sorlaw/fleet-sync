@@ -6,13 +6,22 @@ import { uploadFile } from "@/lib/upload";
 import { getSession } from "@/lib/auth/session";
 
 export async function POST(request: NextRequest) {
-  try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Bad request: invalid form data" },
+      { status: 400 }
+    );
+  }
+
+  try {
     const tripId = formData.get("tripId") as string;
     const type = formData.get("type") as "start" | "return";
     const mileage = formData.get("mileage") as string;

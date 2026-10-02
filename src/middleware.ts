@@ -8,7 +8,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes that don't need auth
-  const publicRoutes = ["/login", "/dispatch", "/api/upload", "/uploads"];
+  const publicRoutes = [
+    "/login",
+    "/dispatch",
+    "/api/dispatch",
+    "/api/auth/logout",
+    "/uploads",
+  ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
@@ -20,7 +26,15 @@ export async function middleware(request: NextRequest) {
   // Check for session token
   const token = request.cookies.get("session_token")?.value;
 
+  // API routes shouldn't redirect to the HTML login page (a 307 on a
+  // multipart POST re-sends the body and trips the 1MB server-action limit)
+  // — return 401 JSON instead.
+  const isApiRoute = pathname.startsWith("/api");
+
   if (!token) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -37,6 +51,9 @@ export async function middleware(request: NextRequest) {
       request: { headers: requestHeaders },
     });
   } catch {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     // Invalid token, redirect to login
     const response = NextResponse.redirect(new URL("/login", request.url));
     response.cookies.delete("session_token");

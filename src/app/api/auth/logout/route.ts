@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { deleteSession } from "@/lib/auth/session";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   await deleteSession();
-  return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_SITE_URL));
+  // 303 so the browser follows up with GET — a plain <form> POST would
+  // otherwise be re-sent to /login as POST (307 preserves the method).
+  return NextResponse.redirect(new URL("/login", request.url), 303);
 }

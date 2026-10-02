@@ -4,13 +4,22 @@ import { vehicles } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 
 export async function POST(request: NextRequest) {
-  try {
-    const session = await getSession();
-    if (session?.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const session = await getSession();
+  if (session?.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Bad request: invalid form data" },
+      { status: 400 }
+    );
+  }
+
+  try {
     const licensePlate = formData.get("licensePlate") as string;
     const makeModel = formData.get("makeModel") as string;
     const status = formData.get("status") as string;

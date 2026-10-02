@@ -10,7 +10,8 @@
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "bun run src/lib/db/seed.ts"
+    "db:seed": "bun run src/lib/db/seed.ts",
+    "db:seed:dummy": "bun run src/lib/db/seed-dummy.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
